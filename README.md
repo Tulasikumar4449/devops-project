@@ -1,51 +1,412 @@
-# DevOps Engineering Assignment: Real-Time Chat App
+# Real-Time WebSocket Application Deployment using Docker, Nginx & GitHub Actions
 
-Welcome! In this assignment, you are tasked with fixing a broken staging environment for our Real-Time Chat web application. 
+## Project Overview
 
-A junior developer recently attempted to containerize this application using Docker and NGINX, but the deployment is currently failing on multiple fronts. Your job is to debug their configuration files and get the application fully operational via Docker Compose.
+This project demonstrates the deployment of a real-time WebSocket application in a production-style environment using Docker, Docker Compose, Nginx Reverse Proxy, Azure Virtual Machine, and GitHub Actions CI/CD.
 
-## System Architecture
+The objective of this assignment was to debug an existing staging application, containerize it, configure reverse proxy networking, automate deployment, and document the complete infrastructure.
 
-The application is built using two primary containers:
-1. **Backend (`backend`)**: A Python-based FastAPI server operating on Port 8000. It handles persistent, real-time WebSocket connections on the `/ws` endpoint.
-2. **Frontend Proxy (`nginx`)**: An NGINX container mapped to Port 80. It is responsible for serving the static files from the `frontend/` directory, while simultaneously intercepting and reverse-proxying all WebSocket upgrade requests down to the backend container.
+---
 
-### Directory Structure
-```text
-realtime-chat-app/
-├── app/
-│   ├── main.py              # FastAPI application server
-│   └── requirements.txt     # Python dependencies
-├── frontend/
-│   └── index.html           # Simple, styled single-page HTML client
-├── Dockerfile               # Instructions to build the Python backend image
-├── docker-compose.yml       # Composes both NGINX and Python Backend services
-└── nginx.conf               # Configuration for NGINX routing and WS proxy
+## Technologies Used
+
+- Azure Virtual Machine (Ubuntu)
+- Docker
+- Docker Compose
+- Nginx
+- GitHub Actions
+- WebSocket
+- Git
+- Linux
+- SSH
+
+---
+
+# Architecture Diagram
+
+![Architecture](architecture.png)
+
+```
+                    User Browser
+                         │
+                         │
+                  Public IP (Azure VM)
+                         │
+                  Nginx Reverse Proxy
+                         │
+          ┌──────────────┴──────────────┐
+          │                             │
+          │                             │
+   Frontend Container           Backend Container
+                                 │
+                                 │
+                           WebSocket Server
 ```
 
-## Your Mission
+---
 
-If you run `docker-compose up -d --build` right now, the containers will start, but the application will not work. You need to debug and fix the following three critical issues:
+# Project Structure
 
-### 1. Fix the Docker Binding (Container Networking)
-The FastAPI backend container is refusing external connections—even from the NGINX container! 
-* **Hint:** Look at how the `uvicorn` command is binding its host in the `Dockerfile`. Inside a Docker container, binding to `localhost` or `127.0.0.1` makes the service unreachable to other containers on the Docker network.
+```
+devops-project/
+│
+├── app/
+├── frontend/
+├── Dockerfile
+├── docker-compose.yml
+├── nginx.conf
+├── README.md
+├── architecture.png
+└── .github/
+    └── workflows/
+        └── deploy.yml
+```
 
-### 2. Fix the Missing User Interface (Volume Mounts)
-If you navigate to `http://localhost` right now, you will likely see the default "Welcome to NGINX" page instead of the chat application.
-* **Hint:** Check `docker-compose.yml`. How is the `nginx` container supposed to get access to the static HTML files located in the local `frontend/` directory? 
+---
 
-### 3. Fix the WebSocket Tunnel (Reverse Proxy Configuration)
-Once the UI is visible, the chat app will continuously say "Disconnected" because the WebSocket handshake is failing.
-* **Hint #1:** In `nginx.conf`, the `proxy_pass` is attempting to route to `localhost:8000`. Does `localhost` mean the same thing inside the NGINX container as it does on your laptop? How do containers communicate with each other in a Compose network?
-* **Hint #2:** NGINX requires explicit headers to convert standard HTTP traffic into a persistent WebSocket tunnel. Some of the required `Upgrade` headers appear to be missing or disabled.
+# Docker Container Setup
 
-## Deliverables
+The application is containerized using Docker.
 
-Submit your finalized, corrected codebase. We will evaluate your submission by executing:
+Containers include:
+
+- Backend Application
+- Frontend Application
+- Nginx Reverse Proxy
+
+Docker Compose is responsible for:
+
+- Building Docker images
+- Creating containers
+- Managing Docker networking
+- Starting all services together
+
+Application can be started using:
 
 ```bash
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
-If everything is configured correctly, we should instantly see the UI and be able to open multiple browser tabs at `http://localhost` to chat back and forth in real-time. Good luck!
+---
+
+# Docker Networking
+
+Docker Compose automatically creates an isolated bridge network.
+
+All containers communicate using Docker service names.
+
+Example:
+
+```
+Nginx
+   │
+   │
+backend:8000
+```
+
+This removes the need to hardcode container IP addresses.
+
+---
+
+# Nginx Reverse Proxy
+
+Nginx acts as the single entry point to the application.
+
+Responsibilities include:
+
+- Routing frontend traffic
+- Forwarding backend API requests
+- Handling WebSocket Upgrade requests
+- Reverse proxy configuration
+
+Key configuration:
+
+```nginx
+proxy_http_version 1.1;
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection "upgrade";
+```
+
+---
+
+# WebSocket Flow
+
+Communication Flow
+
+```
+Browser
+
+↓
+
+Nginx
+
+↓
+
+Backend
+
+↓
+
+Broadcast Message
+
+↓
+
+Connected Clients
+```
+
+Nginx forwards Upgrade requests allowing persistent WebSocket connections between clients and backend.
+
+Multiple users can communicate in real-time.
+
+---
+
+# CI/CD Pipeline
+
+Deployment is fully automated using GitHub Actions.
+
+Pipeline Flow
+
+```
+Developer
+
+↓
+
+Git Push
+
+↓
+
+GitHub Actions
+
+↓
+
+SSH Azure VM
+
+↓
+
+Git Pull
+
+↓
+
+Docker Compose Build
+
+↓
+
+Restart Containers
+
+↓
+
+Deployment Completed
+```
+
+GitHub Actions performs:
+
+- Connect to Azure VM using SSH
+- Pull latest code
+- Rebuild Docker containers
+- Restart application automatically
+
+---
+
+# Deployment Steps
+
+Clone repository
+
+```bash
+git clone https://github.com/Tulasikumar4449/devops-project.git
+```
+
+Move into project
+
+```bash
+cd devops-project
+```
+
+Start containers
+
+```bash
+docker compose up -d --build
+```
+
+Check running containers
+
+```bash
+docker ps
+```
+
+Access application
+
+```
+http://<Public-IP>
+```
+
+---
+
+# Troubleshooting & Issues Fixed
+
+## Issue 1
+
+### Problem
+
+Backend container was inaccessible.
+
+### Root Cause
+
+Incorrect Docker networking configuration.
+
+### Resolution
+
+Configured Docker Compose bridge network and connected services using service names.
+
+---
+
+## Issue 2
+
+### Problem
+
+Nginx returned Bad Gateway.
+
+### Root Cause
+
+Incorrect backend proxy configuration.
+
+### Resolution
+
+Updated proxy_pass configuration in nginx.conf.
+
+---
+
+## Issue 3
+
+### Problem
+
+WebSocket connection failed.
+
+### Root Cause
+
+Upgrade headers missing.
+
+### Resolution
+
+Added:
+
+```nginx
+proxy_http_version 1.1;
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection "upgrade";
+```
+
+---
+
+## Issue 4
+
+### Problem
+
+Application inaccessible externally.
+
+### Root Cause
+
+Azure Network Security Group ports not configured.
+
+### Resolution
+
+Opened required inbound ports and verified Docker port mappings.
+
+---
+
+## Issue 5
+
+### Problem
+
+GitHub Actions deployment failed.
+
+### Root Cause
+
+SSH authentication configuration.
+
+### Resolution
+
+Configured GitHub Secrets:
+
+- SERVER_HOST
+- SERVER_USER
+- SSH_PRIVATE_KEY
+
+---
+
+## Issue 6
+
+### Problem
+
+Containers stopped after server reboot.
+
+### Root Cause
+
+Restart policy not configured.
+
+### Resolution
+
+Configured:
+
+```yaml
+restart: always
+```
+
+for each container in docker-compose.yml.
+
+---
+
+# Security Considerations
+
+- SSH key authentication
+- Docker container isolation
+- Reverse proxy architecture
+- GitHub Secrets for deployment credentials
+
+---
+
+# Future Improvements
+
+- HTTPS using Let's Encrypt
+- Redis Integration
+- Monitoring with Grafana
+- Netdata Dashboard
+- Kubernetes Deployment
+- Terraform Infrastructure as Code
+- Load Balancer
+- Auto Scaling
+
+---
+
+# Repository Contents
+
+- Dockerfile
+- docker-compose.yml
+- nginx.conf
+- GitHub Actions Workflow
+- README.md
+- Architecture Diagram
+
+---
+
+# Live Deployment
+
+Azure Virtual Machine
+
+```
+Public IP:
+<YOUR_PUBLIC_IP>
+```
+
+Repository
+
+```
+https://github.com/Tulasikumar4449/devops-project
+```
+
+---
+
+# Author
+
+Tulasi Kumar
+
+DevOps Assignment
+Docker • Nginx • Azure • GitHub Actions • WebSocket
